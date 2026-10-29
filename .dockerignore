@@ -1,0 +1,7 @@
+.git
+.gitignore
+.env
+.env.*
+**/__pycache__
+**/*.pyc
+src/db.sqlite3

@@ -1,0 +1,55 @@
+services:
+  notificacoes-web:
+    container_name: notificacoes-web
+    build: .
+    image: notificacoes:latest
+    restart: always
+    env_file:
+      - .env
+    mem_limit: 256m
+    # Fase 3 (abrir para apps externos): ports: ["8031:8000"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - notificacoes_net
+      - cisbaf_network_apps  # MySQL
+
+  notificacoes-worker:
+    container_name: notificacoes-worker
+    image: notificacoes:latest
+    restart: always
+    command: ["python", "manage.py", "worker"]
+    # Só o worker recebe a chave do Evolution (.env.worker).
+    env_file:
+      - .env
+      - .env.worker
+    mem_limit: 192m
+    depends_on:
+      notificacoes-web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "saude_worker"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - cisbaf_network_apps  # MySQL
+      - evolution_internal   # Evolution
+
+networks:
+  notificacoes_net:
+    name: notificacoes_net
+    driver: bridge
+  cisbaf_network_apps:
+    external: true
+  evolution_internal:
+    external: true
