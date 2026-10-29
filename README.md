@@ -136,9 +136,11 @@ Sem painel web. Dentro do container:
 
 Regras de cadastro:
 
-- App **interno** (`--interno`): pode não ter IP fixo; pode ter `--livre` (qualquer destino). Ex.: `criar_app chamadosti --interno --livre`.
-- App **externo** com IP fixo: `--ip 203.0.113.5` (ou CIDR, repetível) e destinos fechados: `--destino 21999990000`, `--grupo apelido=JID@g.us`.
-- App externo **sem IP fixo**: só com destinos fechados e limites baixos (máx. 10/min e 100/dia). A chave é a única defesa.
+- **Destino livre é o padrão**: sem `--destino`/`--grupo` o app decide para quem manda. Basta `criar_app meu-app --ip 201.48.24.185`.
+- Para **restringir** um app a certos destinos: `--destino 21999990000` (repetível) e `--grupo apelido=JID@g.us`.
+- App com IP fixo: `--ip 203.0.113.5` (ou CIDR, repetível). A chave só vale vindo desse IP.
+- App **interno** (`--interno`): confiável, pode não ter IP fixo (ex.: `criar_app chamadosti --interno`).
+- App **sem IP fixo e sem `--interno`**: só com destinos fechados e limites baixos (máx. 10/min e 100/dia). Sem IP e com destino livre só a chave protegeria o app, então o comando recusa.
 - Limites: `--limite-minuto`, `--limite-dia`; validade na fila: `--ttl`, `--ttl-max`.
 
 ## Operação
@@ -155,7 +157,7 @@ Regras de cadastro:
 
 - Chave por app, só o hash no banco; comparação em tempo constante; rotação e desativação por app.
 - Allowlist de IP por app aplicada no gateway (usa só o IP da conexão; `X-Forwarded-For` é ignorado). O Docker ignora o UFW em portas publicadas, por isso a regra está aqui.
-- Destinos permitidos por app; limites por minuto/dia e ritmo global no worker.
+- Destinos: livres por padrão (quem protege é a chave + IP); dá para restringir um app a uma lista. Limites por minuto/dia por app e ritmo global no worker.
 - Bloqueio temporário de IP após 10 chaves inválidas em 10 min (contador em memória; zera ao reiniciar).
 - Logs com número mascarado; corpo de erro do Evolution nunca é logado.
 - Sem HTTPS (decisão do projeto): quem estiver no caminho vê chave, números e texto de apps externos. Mitigação: firewall do provedor só para os IPs dos apps e nenhum dado sensível no texto.

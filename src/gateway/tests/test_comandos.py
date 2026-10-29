@@ -53,6 +53,28 @@ class CriarAppTests(TestCase):
         self.assertEqual(self.enviar(chave, REMOTE_ADDR="203.0.113.5").status_code, 202)
         self.assertEqual(self.enviar(chave, REMOTE_ADDR="198.51.100.5").status_code, 403)
 
+    def test_externo_so_com_ip_tem_destino_livre(self):
+        chave = extrair_chave(rodar("criar_app", "ext", "--ip", "203.0.113.5"))
+        app = App.objects.get(nome="ext")
+        self.assertTrue(app.destino_livre)
+        self.assertEqual(app.destinos_permitidos, [])
+        # manda para qualquer número, mas só do IP cadastrado
+        for destino in ("21990729548", "5511988887777"):
+            r = self.c.post("/v1/messages", {"to": destino, "text": "oi"}, format="json", **auth(chave),
+                            REMOTE_ADDR="203.0.113.5")
+            self.assertEqual(r.status_code, 202, destino)
+        r = self.c.post("/v1/messages", {"to": NUMERO, "text": "oi"}, format="json", **auth(chave),
+                        REMOTE_ADDR="198.51.100.5")
+        self.assertEqual(r.status_code, 403)
+
+    def test_interno_sem_destinos_tambem_e_livre(self):
+        rodar("criar_app", "int", "--interno")
+        self.assertTrue(App.objects.get(nome="int").destino_livre)
+
+    def test_com_destino_o_app_fica_restrito(self):
+        rodar("criar_app", "ext", "--ip", "203.0.113.5", "--destino", NUMERO)
+        self.assertFalse(App.objects.get(nome="ext").destino_livre)
+
     def test_grupo_por_apelido(self):
         chave = extrair_chave(rodar("criar_app", "ext", "--ip", "203.0.113.5", "--grupo", f"ti={GRUPO}"))
         app = App.objects.get(nome="ext")
@@ -70,8 +92,8 @@ class CriarAppTests(TestCase):
 
     def test_recusas(self):
         casos = [
-            ("sem destino nem livre", ["x", "--ip", "203.0.113.5"]),
-            ("livre sem interno", ["x", "--livre"]),
+            ("sem ip, sem interno e sem destinos (so a chave protegeria)", ["x"]),
+            ("livre junto com destino", ["x", "--ip", "203.0.113.5", "--livre", "--destino", NUMERO]),
             ("externo sem ip acima do teto", ["x", "--destino", NUMERO, "--limite-minuto", "50"]),
             ("ip invalido", ["x", "--ip", "999.1.1.1", "--destino", NUMERO]),
             ("destino invalido", ["x", "--ip", "203.0.113.5", "--destino", "abc"]),

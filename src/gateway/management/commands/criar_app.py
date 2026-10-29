@@ -19,10 +19,12 @@ class Command(BaseCommand):
     def add_arguments(self, p):
         p.add_argument("nome")
         p.add_argument("--interno", action="store_true", help="App interno confiável (pode não ter IP fixo).")
-        p.add_argument("--livre", action="store_true", help="Destino livre (só com --interno).")
+        p.add_argument("--livre", action="store_true", help="Destino livre (já é o padrão sem --destino/--grupo).")
         p.add_argument("--ip", action="append", default=[], help="IP ou CIDR permitido (repita para vários).")
-        p.add_argument("--destino", action="append", default=[], help="Número permitido (repita).")
-        p.add_argument("--grupo", action="append", default=[], help="apelido=JID@g.us permitido (repita).")
+        p.add_argument("--destino", action="append", default=[],
+                       help="Restringe o app a este número (repita). Sem --destino/--grupo o destino é livre.")
+        p.add_argument("--grupo", action="append", default=[],
+                       help="Restringe o app a este grupo, apelido=JID@g.us (repita).")
         p.add_argument("--limite-minuto", type=int)
         p.add_argument("--limite-dia", type=int)
         p.add_argument("--ttl", type=int, default=3600, help="TTL padrão em segundos.")
@@ -32,9 +34,6 @@ class Command(BaseCommand):
         nome = o["nome"].strip()
         if not nome or App.objects.filter(nome=nome).exists():
             raise CommandError("Nome vazio ou já existente.")
-        if o["livre"] and not o["interno"]:
-            raise CommandError("Destino livre só para app --interno.")
-
         ips = []
         for valor in o["ip"]:
             try:
@@ -56,8 +55,15 @@ class Command(BaseCommand):
             except dest.DestinoInvalido as e:
                 raise CommandError(f"Destino inválido ({e})")
 
-        if not o["livre"] and not permitidos:
-            raise CommandError("Informe --destino/--grupo, ou --livre num app --interno.")
+        # Sem lista de destinos, o app decide para quem manda (a chave + o IP é que o protegem).
+        livre = not permitidos
+        if o["livre"] and permitidos:
+            raise CommandError("--livre não combina com --destino/--grupo.")
+        if livre and not o["interno"] and not ips:
+            raise CommandError(
+                "Sem --ip e sem lista de destinos só a chave protegeria o app. "
+                "Informe --ip, ou --destino/--grupo, ou --interno."
+            )
         if not o["interno"] and not ips:
             if o["limite_minuto"] is None:
                 o["limite_minuto"] = TETO_SEM_IP[0] // 2
@@ -72,7 +78,7 @@ class Command(BaseCommand):
 
         chave = gerar_chave()
         App.objects.create(
-            nome=nome, chave_hash=hash_chave(chave), interno=o["interno"], destino_livre=o["livre"],
+            nome=nome, chave_hash=hash_chave(chave), interno=o["interno"], destino_livre=livre,
             destinos_permitidos=sorted(set(permitidos)), apelidos_grupo=apelidos, ips_permitidos=ips,
             limite_minuto=o["limite_minuto"] if o["limite_minuto"] is not None else (30 if o["interno"] else 20),
             limite_dia=o["limite_dia"] if o["limite_dia"] is not None else (500 if o["interno"] else 300),
